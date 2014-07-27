@@ -1,0 +1,163 @@
+---
+title: "Machine Learning"
+author: "Esteban Vargas"
+date: "Sunday, July 27, 2014"
+output: html_document
+---
+
+
+
+# Executive summary
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their healt, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.pu-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+The purpose of this study is to predict the ways that the lifting exercise was performed. The outcome variable is called "classe" and it is a factor variable that gos from A to E in 5 differente cathegories.We will next explain how the model was built for an 85.8% of accuracy in contrast with other not so well performed exercises.
+
+
+
+# Tidy data
+
+The first step is to load the data, as well as the "caret" package from the library which is the principal function that will be used in order to generate the algorithm of prediction.
+
+```{r cache=TRUE}
+setwd("C:/Users/Usuario/Documents/Esteban/machine learning/ASSIGNMENT")
+finaltest<-read.csv("pml-testing.csv")
+datos<-read.csv("pml-training.csv")
+library(caret)
+```
+
+The next step is to eliminate unwanted variables, since we have 160 variables, many with NA values, they were eliminated from all the datasets as follows:
+
+```{r cache=TRUE}
+#eliminate unwanted predictors
+
+check<-data.frame(names(datos),names(finaltest))
+check$a<-rep(NA,ncol(finaltest))
+check$len<-rep(NA,ncol(finaltest))
+for(i in 1:ncol(finaltest)){
+    check$a[i]<-NA %in% finaltest[,i]
+    check$identical[i]<-identical(names(finaltest)[i],names(datos)[i])    
+    check$empty[i]<-length(finaltest[,i])
+}
+
+finaltest<-finaltest[,!check$a]
+datos<-datos[,!check$a]
+
+datos$X<-NULL
+finaltest$X<-NULL
+
+```
+
+Now that we have filtered both datasets, we can generate a training dataset that will be used to fit a model and then a testing dataset in order to observe predictive power for the model and if results are good enough, we can use it in the finaltest  dataset. We use createDataPartition from caret package to avoid biasness of information.
+
+
+```{r cache=TRUE}
+
+inTrain<-createDataPartition(y=datos$classe,p=0.75,list=FALSE)
+training<-datos[inTrain,]
+testing<-datos[-inTrain,]
+
+```
+
+
+# Exploratory data analysis
+
+In order to observe significant variables we make two dimensional plots of variables, coloured by the classe in order to observe a trend.
+
+We first create a plot function to apply to the variables:
+
+```{r cache=TRUE}
+parameters<-names(training)[6:ncol(training)]
+
+explot<-function(p1,p2){
+    plot(training[training$classe=="A",p1]~training[training$classe=="A",p2],
+         ylab=p1,xlab=p2,pch=19,col="red",cex=0.4,
+         ylim=c(min(training[,p1]),max(training[p1])),xlim=c(min(training[,p2]),max(training[,p2])))
+    points(training[training$classe=="B",p1]~training[training$classe=="B",p2],pch=19,col="lightgreen",cex=0.4)
+    points(training[training$classe=="c",p1]~training[training$classe=="c",p2],pch=19,col="purple",cex=0.4)
+    points(training[training$classe=="D",p1]~training[training$classe=="D",p2],pch=19,col="yellow",cex=0.4)
+    points(training[training$classe=="E",p1]~training[training$classe=="E",p2],pch=19,col="grey",cex=0.4)
+}
+
+```
+
+We now apply to the variables. In this paper we will only show some examples due to the quantity of variables:
+
+```{r cache=TRUE}
+explot(parameters[9],parameters[10])
+explot(parameters[15],parameters[16])
+explot(parameters[17],parameters[18])
+```
+
+As we can see, there is an observed relationship between classes and the variables. The complete observation of this exploratory data led us to use all the remaining variables of the datasets.
+
+
+# Model Fitting
+
+Many models were tried in this section, we will present two of the models fitted.
+
+## Tree partisioning
+
+The first model used was tree partisioning. It is important to notice that most of the variables are numerical and the outcome is cathegorical, with that many numerical variables, this model was not likely to be significant, but it was important for detecting meaningful variables for other models. The code for fitting the model was as follows:
+
+```{r cache=TRUE}
+library(rpart)
+modFit<-train(classe~.,method="rpart",data=training)
+print(modFit$finalModel)
+```
+
+As we can see there are lots of nods in this tree, a better way to observe is with the  next plot.
+
+```{r cache=TRUE}
+library(rattle)
+fancyRpartPlot(modFit$finalModel)
+
+```
+
+In order to observe how applicable this model is, we compare our predictions with the real results of the testing set, once we predict in base our model with the testing data.
+
+```{r cache=TRUE}
+predictions<-predict(modFit,newdata=testing)
+confusionMatrix(predictions,testing$classe)
+
+```
+
+As we can see we have an accuracy of 0.46 which is insufficient for predicting. On the other hand, our model can did not predict any B o D class.
+
+## Model based prediction
+
+For using this model we assume tht data follow a probability model which can in fact be the case in this dataset. 
+
+The code used in this case as well as the results are as follows:
+
+```{r cache=TRUE , warning=FALSE}
+modFit2<-train(classe~.,method="lda",data=training)
+```
+
+We did not print results because of the space required. The confusion matrix that follows allows us to observe the predictive power of the model:
+
+```{r cache=TRUE}
+predictions2<-predict(modFit2,newdata=testing)
+confusionMatrix(predictions2,testing$classe)
+```
+
+As we can see, accuracy in this model is now 85% which is good considering 5 different levels. Even if it is not ideal, this is the best model we could find and possible errors are not far from claases.
+
+# Results
+
+Results of appying the model for predictinf in the final test set are shown here:
+
+```{r cache =TRUE}
+
+predictions.fin2<-predict(modFit2,newdata=finaltest)
+table(predictions.fin2)
+predictions.fin2
+
+```
+
+It is expected 2-3 errors in this predictions, more possibly from a B or C predicted classe.
+
+
+
+
+
